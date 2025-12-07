@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <link rel="stylesheet" href="css/leaflet.css">
+        <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
+        <link rel="stylesheet" href="css/qgis2web.css">
+        <link rel="stylesheet" href="css/fontawesome-all.min.css">
+        <link rel="stylesheet" href="css/leaflet-search.css">
+        <link rel="stylesheet" href="css/leaflet.photon.css">
+        <link rel="stylesheet" href="css/leaflet-measure.css">
+        <style>
+        html, body, #map {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        </style>
+        <title>Peta Desa Kauman - Kab.Nganjuk</title>
+    </head>
+    <body>
+        <div id="map">
+        </div>
+        <script src="js/qgis2web_expressions.js"></script>
+        <script src="js/leaflet.js"></script>
+        <script src="js/L.Control.Layers.Tree.min.js"></script>
+        <script src="js/leaflet.rotatedMarker.js"></script>
+        <script src="js/leaflet.pattern.js"></script>
+        <script src="js/leaflet-hash.js"></script>
+        <script src="js/Autolinker.min.js"></script>
+        <script src="js/rbush.min.js"></script>
+        <script src="js/labelgun.min.js"></script>
+        <script src="js/labels.js"></script>
+        <script src="js/leaflet.photon.js"></script>
+        <script src="js/leaflet-measure.js"></script>
+        <script src="js/leaflet-search.js"></script>
+        <script src="data/LULC_Kauman_FIX_1.js"></script>
+        <script>
+        var map = L.map('map', {
+            zoomControl:false, maxZoom:28, minZoom:1
+        })
+        var hash = new L.Hash(map);
+        map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+        var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+        // remove popup's row if "visible-with-data"
+        function removeEmptyRowsFromPopupContent(content, feature) {
+         var tempDiv = document.createElement('div');
+         tempDiv.innerHTML = content;
+         var rows = tempDiv.querySelectorAll('tr');
+         for (var i = 0; i < rows.length; i++) {
+             var td = rows[i].querySelector('td.visible-with-data');
+             var key = td ? td.id : '';
+             if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
+                 rows[i].parentNode.removeChild(rows[i]);
+             }
+         }
+         return tempDiv.innerHTML;
+        }
+        // modify popup if contains media
+        function addClassToPopupIfMedia(content, popup) {
+            var tempDiv = document.createElement('div');
+            tempDiv.innerHTML = content;
+            var imgTd = tempDiv.querySelector('td img');
+            if (imgTd) {
+                var src = imgTd.getAttribute('src');
+                if (/\.(jpg|jpeg|png|gif|bmp|webp|avif)$/i.test(src)) {
+                    popup._contentNode.classList.add('media');
+                    setTimeout(function() {
+                        popup.update();
+                    }, 10);
+                } else if (/\.(mp3|wav|ogg|aac)$/i.test(src)) {
+                    var audio = document.createElement('audio');
+                    audio.controls = true;
+                    audio.src = src;
+                    imgTd.parentNode.replaceChild(audio, imgTd);
+                    popup._contentNode.classList.add('media');
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else if (/\.(mp4|webm|ogg|mov)$/i.test(src)) {
+                    var video = document.createElement('video');
+                    video.controls = true;
+                    video.src = src;
+                    video.style.width = "400px";
+                    video.style.height = "300px";
+                    video.style.maxHeight = "60vh";
+                    video.style.maxWidth = "60vw";
+                    imgTd.parentNode.replaceChild(video, imgTd);
+                    popup._contentNode.classList.add('media');
+                    // Aggiorna il popup quando il video carica i metadati
+                    video.addEventListener('loadedmetadata', function() {
+                        popup.update();
+                    });
+                    setTimeout(function() {
+                        popup.setContent(tempDiv.innerHTML);
+                        popup.update();
+                    }, 10);
+                } else {
+                    popup._contentNode.classList.remove('media');
+                }
+            } else {
+                popup._contentNode.classList.remove('media');
+            }
+        }
+        var title = new L.Control({'position':'topright'});
+        title.onAdd = function (map) {
+            this._div = L.DomUtil.create('div', 'info');
+            this.update();
+            return this._div;
+        };
+        title.update = function () {
+            this._div.innerHTML = '<h2>Peta Desa Kauman - Kab.Nganjuk</h2>';
+        };
+        title.addTo(map);
+        var abstract = new L.Control({'position':'topright'});
+        abstract.onAdd = function (map) {
+            this._div = L.DomUtil.create('div',
+            'leaflet-control abstract');
+            this._div.id = 'abstract'
+                this._div.setAttribute("onmouseenter", "abstract.show()");
+                this._div.setAttribute("onmouseleave", "abstract.hide()");
+                this.hide();
+                return this._div;
+            };
+            abstract.hide = function () {
+                this._div.classList.remove("abstractUncollapsed");
+                this._div.classList.add("abstract");
+                this._div.innerHTML = 'i'
+            }
+            abstract.show = function () {
+                this._div.classList.remove("abstract");
+                this._div.classList.add("abstractUncollapsed");
+                this._div.innerHTML = 'Peta Desa Kauman Kabupaten Nganjuk ini dibuat oleh tim PKL Jurusan Geomatika SMKN 1 Nganjuk bekerja sama dengan OBSLUZIVO. Peta diperoleh dari pemetaan dengan menggunakan drone yang diambil secara oblique sehingga diperoleh peta 3D. Peta 3D tidak ditampilkan di webgis ini. Peta foto selanjutnya dilakukan digitasi untuk memperoleh Land Use Land Covernya seperti yang ditampilkan dalam peta webgis ini.';
+        };
+        abstract.addTo(map);
+        var zoomControl = L.control.zoom({
+            position: 'topleft'
+        }).addTo(map);
+        var measureControl = new L.Control.Measure({
+            position: 'topleft',
+            primaryLengthUnit: 'meters',
+            secondaryLengthUnit: 'kilometers',
+            primaryAreaUnit: 'sqmeters',
+            secondaryAreaUnit: 'hectares'
+        });
+        measureControl.addTo(map);
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].innerHTML = '';
+        document.getElementsByClassName('leaflet-control-measure-toggle')[0].className += ' fas fa-ruler';
+        var bounds_group = new L.featureGroup([]);
+        function setBounds() {
+            if (bounds_group.getLayers().length) {
+                map.fitBounds(bounds_group.getBounds());
+            }
+        }
+        map.createPane('pane_OpenStreetMap_0');
+        map.getPane('pane_OpenStreetMap_0').style.zIndex = 400;
+        var layer_OpenStreetMap_0 = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            pane: 'pane_OpenStreetMap_0',
+            opacity: 1.0,
+            attribution: '',
+            minZoom: 1,
+            maxZoom: 28,
+            minNativeZoom: 0,
+            maxNativeZoom: 19
+        });
+        layer_OpenStreetMap_0;
+        map.addLayer(layer_OpenStreetMap_0);
+        function pop_LULC_Kauman_FIX_1(feature, layer) {
+            var popupContent = '<table>\
+                    <tr>\
+                        <th scope="row">OBJECTID</th>\
+                        <td>' + (feature.properties['OBJECTID'] !== null ? autolinker.link(String(feature.properties['OBJECTID']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Nama Objek</th>\
+                        <td>' + (feature.properties['Nama_objek'] !== null ? autolinker.link(String(feature.properties['Nama_objek']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Keterangan Objek</th>\
+                        <td>' + (feature.properties['Ket_objek'] !== null ? autolinker.link(String(feature.properties['Ket_objek']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Kelas Objek</th>\
+                        <td>' + (feature.properties['Id_objek'] !== null ? autolinker.link(String(feature.properties['Id_objek']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                    <tr>\
+                        <th scope="row">Luas Area KmSq</th>\
+                        <td>' + (feature.properties['Shape_Area'] !== null ? autolinker.link(String(feature.properties['Shape_Area']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
+                    </tr>\
+                </table>';
+            var content = removeEmptyRowsFromPopupContent(popupContent, feature);
+			layer.on('popupopen', function(e) {
+				addClassToPopupIfMedia(content, e.popup);
+			});
+			layer.bindPopup(content, { maxHeight: 400 });
+        }
+
+        function style_LULC_Kauman_FIX_1_0(feature) {
+            switch(String(feature.properties['Id_objek'])) {
+                case 'Tempat Pembuangan Sampah':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(215,25,28,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Tempat ibadah':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(221,48,39,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'SPBU':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(227,71,49,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Sekolah':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(233,94,60,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Sawah':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(238,117,70,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Rumah Sakit':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(244,140,81,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Rumah sakit':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(250,163,92,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Retail':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(253,180,104,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Rel Kereta':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(253,193,119,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'PT':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,205,133,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Pepohonan':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,218,148,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Penginapan':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(254,230,162,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Pemukiman':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,243,177,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Pemakaman Umum':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(255,255,191,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Pekarangan':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(242,250,187,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Museum':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(229,245,183,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Lapangan':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(216,239,179,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Keuangan':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(203,234,174,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Kebun':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(190,229,170,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Kantor':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(177,224,166,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Jalan tanah':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(161,214,166,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Jalan':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(141,200,169,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'GOR':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(122,186,172,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Belukar':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(102,173,176,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Badan Air':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(82,159,179,1.0)',
+                interactive: true,
+            }
+                    break;
+                case 'Apotek':
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(63,145,183,1.0)',
+                interactive: true,
+            }
+                    break;
+                default:
+                    return {
+                pane: 'pane_LULC_Kauman_FIX_1',
+                opacity: 1,
+                color: 'rgba(56,128,54,1.0)',
+                dashArray: '',
+                lineCap: 'butt',
+                lineJoin: 'miter',
+                weight: 1.0, 
+                fill: true,
+                fillOpacity: 1,
+                fillColor: 'rgba(43,131,186,1.0)',
+                interactive: true,
+            }
+                    break;
+            }
+        }
+        map.createPane('pane_LULC_Kauman_FIX_1');
+        map.getPane('pane_LULC_Kauman_FIX_1').style.zIndex = 401;
+        map.getPane('pane_LULC_Kauman_FIX_1').style['mix-blend-mode'] = 'normal';
+        var layer_LULC_Kauman_FIX_1 = new L.geoJson(json_LULC_Kauman_FIX_1, {
+            attribution: '',
+            interactive: true,
+            dataVar: 'json_LULC_Kauman_FIX_1',
+            layerName: 'layer_LULC_Kauman_FIX_1',
+            pane: 'pane_LULC_Kauman_FIX_1',
+            onEachFeature: pop_LULC_Kauman_FIX_1,
+            style: style_LULC_Kauman_FIX_1_0,
+        });
+        bounds_group.addLayer(layer_LULC_Kauman_FIX_1);
+        map.addLayer(layer_LULC_Kauman_FIX_1);
+        const url = {"Nominatim OSM": "https://nominatim.openstreetmap.org/search?format=geojson&addressdetails=1&",
+        "France BAN": "https://api-adresse.data.gouv.fr/search/?"}
+        var photonControl = L.control.photon({
+            url: url["Nominatim OSM"],
+            feedbackLabel: '',
+            position: 'topleft',
+            includePosition: true,
+            initial: true,
+            // resultsHandler: myHandler,
+        }).addTo(map);
+        photonControl._container.childNodes[0].style.borderRadius="10px"
+        // Create a variable to store the geoJSON data
+        var x = null;
+        // Create a variable to store the marker
+        var marker = null;
+        // Add an event listener to the Photon control to create a marker from the returned geoJSON data
+        var z = null;
+        photonControl.on('selected', function(e) {
+            console.log(photonControl.search.resultsContainer);
+            if (x != null) {
+                map.removeLayer(obj3.marker);
+                map.removeLayer(x);
+            }
+            obj2.gcd = e.choice;
+            x = L.geoJSON(obj2.gcd).addTo(map);
+            var label = typeof obj2.gcd.properties.label === 'undefined' ? obj2.gcd.properties.display_name : obj2.gcd.properties.label;
+            obj3.marker = L.marker(x.getLayers()[0].getLatLng()).bindPopup(label).addTo(map);
+            map.setView(x.getLayers()[0].getLatLng(), 17);
+            z = typeof e.choice.properties.label === 'undefined'? e.choice.properties.display_name : e.choice.properties.label;
+            console.log(e);
+            e.target.input.value = z;
+        });
+        var search = document.getElementsByClassName("leaflet-photon leaflet-control")[0];
+        search.classList.add("leaflet-control-search")
+        search.style.display = "flex";
+        search.style.backgroundColor="rgba(255,255,255,0.5)" 
+
+        // Create the new button element
+        var button = document.createElement("div");
+        button.id = "gcd-button-control";
+        button.className = "gcd-gl-btn fa fa-search search-button";
+
+        // Insert the button at the beginning of the search control
+        search.insertBefore(button, search.firstChild);
+        last = search.lastChild;
+        last.style.display = "none";
+        button.addEventListener("click", function (e) {
+            if (last.style.display === "none") {
+                last.style.display = "block";
+            } else {
+                last.style.display = "none";
+            }
+        });
+        var overlaysTree = [
+            {label: 'LULC_Kauman_FIX<br /><table><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_TempatPembuanganSampah0.png" /></td><td>Tempat Pembuangan Sampah</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_Tempatibadah1.png" /></td><td>Tempat ibadah</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_SPBU2.png" /></td><td>SPBU</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_Sekolah3.png" /></td><td>Sekolah</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_Sawah4.png" /></td><td>Sawah</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_RumahSakit5.png" /></td><td>Rumah Sakit</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_Rumahsakit6.png" /></td><td>Rumah sakit</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_Retail7.png" /></td><td>Retail</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_RelKereta8.png" /></td><td>Rel Kereta</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_PT9.png" /></td><td>PT</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_Pepohonan10.png" /></td><td>Pepohonan</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_Penginapan11.png" /></td><td>Penginapan</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_Pemukiman12.png" /></td><td>Pemukiman</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_PemakamanUmum13.png" /></td><td>Pemakaman Umum</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_Pekarangan14.png" /></td><td>Pekarangan</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_Museum15.png" /></td><td>Museum</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_Lapangan16.png" /></td><td>Lapangan</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_Keuangan17.png" /></td><td>Keuangan</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_Kebun18.png" /></td><td>Kebun</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_Kantor19.png" /></td><td>Kantor</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_Jalantanah20.png" /></td><td>Jalan tanah</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_Jalan21.png" /></td><td>Jalan</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_GOR22.png" /></td><td>GOR</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_Belukar23.png" /></td><td>Belukar</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_BadanAir24.png" /></td><td>Badan Air</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_Apotek25.png" /></td><td>Apotek</td></tr><tr><td style="text-align: center;"><img src="legend/LULC_Kauman_FIX_1_26.png" /></td><td></td></tr></table>', layer: layer_LULC_Kauman_FIX_1},
+            {label: "OpenStreetMap", layer: layer_OpenStreetMap_0},]
+        var lay = L.control.layers.tree(null, overlaysTree,{
+            //namedToggle: true,
+            //selectorBack: false,
+            //closedSymbol: '&#8862; &#x1f5c0;',
+            //openedSymbol: '&#8863; &#x1f5c1;',
+            //collapseAll: 'Collapse all',
+            //expandAll: 'Expand all',
+            collapsed: true,
+        });
+        lay.addTo(map);
+        setBounds();
+        map.addControl(new L.Control.Search({
+            layer: layer_LULC_Kauman_FIX_1,
+            initial: false,
+            hideMarkerOnCollapse: true,
+            propertyName: 'Id_objek'}));
+        if (typeof url === 'undefined') {
+            document.getElementsByClassName('search-button')[0].className += ' fa fa-binoculars';
+        } else {
+            document.getElementsByClassName('search-button')[1].className += ' fa fa-binoculars';
+        }
+        </script>        
+    </body>
+</html>
